@@ -4,13 +4,12 @@ import numpy as np
 import random
 import plotly.express as px
 
-# ---------- Simulación de datos ----------
-@st.cache_data
-def generar_datos():
+# --------- Simulación de datos optimizada y cacheada ---------
+@st.cache_data(show_spinner="Cargando datos...")
+def generar_datos(num_filas=1000):
     num_empresas = 250
     num_proveedores = 200
     num_materiales = 100
-    num_filas = 1000
 
     empresas = [f"Empresa_{i:03}" for i in range(1, num_empresas + 1)]
     proveedores = [f"Proveedor_{i:03}" for i in range(1, num_proveedores + 1)]
@@ -39,7 +38,6 @@ def generar_datos():
     df = pd.DataFrame(datos)
     df["gasto_usd"] = (df["unidades"] * df["precio_unitario"]).round(2)
 
-    # Precio mínimo para el proveedor-material
     precio_min = df.groupby(["proveedor", "material"])["precio_unitario"].min().reset_index()
     precio_min = precio_min.rename(columns={"precio_unitario": "precio_unitario_min"})
     df = df.merge(precio_min, on=["proveedor", "material"])
@@ -47,9 +45,18 @@ def generar_datos():
 
     return df
 
-df = generar_datos()
+# --------- UI principal ---------
+st.set_page_config("Análisis de Proveedores", layout="wide")
+st.title("📊 Análisis de Ahorro Potencial por Proveedor")
+st.markdown("Este dashboard identifica oportunidades para renegociar contratos con proveedores compartidos entre empresas del portafolio.")
 
-# ---------- KPIs ----------
+# --------- Sidebar control ---------
+with st.sidebar:
+    st.header("⚙️ Parámetros")
+    filas = st.slider("Cantidad de registros simulados", 500, 10000, 1000, step=500)
+    df = generar_datos(num_filas=filas)
+
+# --------- KPIs generales ---------
 kpi_prov = df.groupby("proveedor").agg({
     "gasto_usd": "sum",
     "ahorro_potencial": "sum",
@@ -64,29 +71,43 @@ kpi_prov = df.groupby("proveedor").agg({
 
 mejoras = df[df["ahorro_potencial"] > 0].sort_values("ahorro_potencial", ascending=False)
 
-# ---------- UI ----------
-st.title("📊 Análisis de Proveedores y Ahorro Potencial")
-st.markdown("Este dashboard permite identificar oportunidades de ahorro en contratos compartidos por múltiples empresas dentro del portafolio.")
+# --------- Visualización ---------
+col1, col2 = st.columns([3, 2])
 
-# ---------- Gráfico interactivo ----------
-fig = px.bar(
-    kpi_prov.head(15),
-    x="proveedor",
-    y="Ahorro Potencial (USD)",
-    hover_data=["Gasto Total (USD)", "Empresas Distintas", "Materiales Distintos"],
-    title="Top 15 Proveedores con Mayor Ahorro Potencial",
+with col1:
+    top_kpi = kpi_prov.head(15)
+    fig = px.bar(
+        top_kpi,
+        x="proveedor",
+        y="Ahorro Potencial (USD)",
+        hover_data=["Gasto Total (USD)", "Empresas Distintas"],
+        title="Top 15 Proveedores con Mayor Ahorro Potencial",
+        color="Ahorro Potencial (USD)",
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+with col2:
+    st.metric("💸 Gasto Total", f"${df['gasto_usd'].sum():,.0f}")
+    st.metric("💰 Ahorro Potencial Total", f"${df['ahorro_potencial'].sum():,.0f}")
+    st.metric("🏢 Empresas en el portafolio", df["empresa"].nunique())
+    st.metric("📦 Proveedores únicos", df["proveedor"].nunique())
+
+# --------- Tabla principal de KPIs ---------
+st.subheader("📋 KPIs por Proveedor")
+st.dataframe(kpi_prov.head(50), use_container_width=True)
+
+# --------- Filtro interactivo ---------
+st.subheader("🏢 Empresas que pueden renegociar precios")
+
+proveedor_sel = st.selectbox(
+    "Selecciona un proveedor para ver empresas relacionadas",
+    options=mejoras["proveedor"].unique()
 )
-st.plotly_chart(fig)
 
-# ---------- Tabla general ----------
-st.subheader("🔎 KPIs por Proveedor")
-st.dataframe(kpi_prov, use_container_width=True)
-
-# ---------- Tabla filtrable por proveedor ----------
-st.subheader("🏢 Empresas que pueden renegociar contratos")
-proveedor_sel = st.selectbox("Selecciona un proveedor", options=mejoras["proveedor"].unique())
 detalle = mejoras[mejoras["proveedor"] == proveedor_sel][[
-    "empresa", "material", "unidades", "precio_unitario", "precio_unitario_min", "ahorro_potencial"
+    "empresa", "material", "unidades",
+    "precio_unitario", "precio_unitario_min", "ahorro_potencial"
 ]].sort_values("ahorro_potencial", ascending=False)
 
 st.dataframe(detalle, use_container_width=True)
+
