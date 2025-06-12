@@ -1,13 +1,4 @@
-# --- core ---
-streamlit==1.44.0          
-pandas==2.2.0            
-numpy==1.26.4              
-
-# --- ML y métricas ---
-scikit-learn==1.6.1        
-xgboost==3.0.0             
-tensorflow-cpu==2.16.0     
-joblib==1.4.2        
-      
-# --- gráficos ---
-plotly==6.0.1              
+streamlit==1.35.0
+pandas==2.2.2
+numpy==1.26.4
+plotly==5.21.0
